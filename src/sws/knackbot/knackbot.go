@@ -101,10 +101,11 @@ func main() {
                 if bareJid(v.Remote) == *ircmuc_jid {
                     if nickName(v.Remote) == *nick {
                         fmt.Println("Was own nick, not forwarding...")
-                    } else {
+                    } else if nickName(v.Remote) != "" {
                         fmt.Println("Was irc muc, forwarding to ", *muc_jid)
 						talk.SendPresence(xmpp.Presence{From: (*muc_jid) + "/knackbot", To: (*muc_jid) + "/" + nickName(v.Remote)})
-                        talk.Send(xmpp.Chat{Remote: *muc_jid, Type: "groupchat", Text: nickName(v.Remote) + " said: " + v.Text})
+                        //talk.Send(xmpp.Chat{Remote: *muc_jid, Type: "groupchat", Text: nickName(v.Remote) + " said: " + v.Text})
+                        talk.Send(xmpp.Chat{Remote: *muc_jid, Type: "groupchat", Text: v.Text})
 						talk.SendPresence(xmpp.Presence{To: (*muc_jid) + "/knackbot", From: (*muc_jid) + "/" + nickName(v.Remote)})
                     }
                 }
