@@ -6,11 +6,12 @@ import (
     "flag"
     "fmt"
     "os"
-    "log"
-    "crypto/tls"
-    "github.com/mattn/go-xmpp"
+    //"log"
+    //"crypto/tls"
+	//"github.com/mattn/go-xmpp"
 	"runtime"
 	"time"
+	"github.com/thoj/go-ircevent"
 )
 
 var server = flag.String("server", "", "server")
@@ -27,6 +28,9 @@ var muc_password = flag.String("mucpw", "", "muc password")
 var nick = flag.String("nick", "", "nick to use in irc muc (messages from this nick in the muc are forwarded to the irc muc), must be different from knackbot")
 var ircmuc_jid = flag.String("ircmuc", "", "irc muc jid (required)")
 var ircmuc_password = flag.String("ircmucpw", "", "irc muc password")
+var ircurl = flag.String("ircurl", "", "irc host url (<host>:<port>)")
+var ircchannel = flag.String("ircchannel", "", "irc channel to join")
+var ircnick = flag.String("ircnick", "", "irc nick")
 
 func serverName(host string) string {
 	return strings.Split(host, ":")[0]
@@ -52,6 +56,8 @@ func main() {
         os.Exit(2)
     }
     flag.Parse()
+
+	/*
 	if *username == "" || *password == "" {
 		if *debug && *username == "" && *password == "" {
 			fmt.Fprintf(os.Stderr, "no username or password were given; attempting ANONYMOUS auth\n")
@@ -69,7 +75,58 @@ func main() {
 			InsecureSkipVerify: false,
 		}
 	}
+	*/
 
+	if(*ircurl == "" || *ircchannel == "" || *ircnick=="") {
+		flag.Usage()
+	}
+
+    ircobj := irc.IRC(*ircnick, *ircnick) //Create new ircobj
+    //Set options
+    //ircobj.UseTLS = true //default is false
+    //ircobj.TLSOptions //set ssl options
+    //ircobj.Password = "[server password]"
+    //Commands
+    ircobj.Connect(*ircurl) //Connect to server
+
+
+    ircobj.AddCallback("*", func(event *irc.Event) {
+        //event.Message() contains the message
+        //event.Nick Contains the sender
+        //event.Arguments[0] Contains the channel
+        fmt.Println(event.Code, ":", event.Source, ",", event.Nick, ",", event.Message())
+    });
+
+    ircobj.AddCallback("353", func(event *irc.Event) {
+        if len(event.Arguments) > 0 && event.Arguments[0] == *ircchannel {
+            fmt.Println("List of nicks in channel:", event.Arguments[0], ", ", event.Code, ":", event.Source, ",", event.Nick, ",", event.Message())
+        }
+    });
+
+    ircobj.AddCallback("332", func(event *irc.Event) {
+        if len(event.Arguments) > 0 && event.Arguments[0] == *ircchannel {
+            fmt.Println("Channel subject:", event.Code, ":", event.Source, ",", event.Nick, ",", event.Message())
+        }
+    })
+
+    go ircobj.Loop()
+
+    time.Sleep(3 * time.Second)
+
+    ircobj.SendRawf("NAMES %s", *ircchannel)
+
+    time.Sleep(3 * time.Second)
+
+    ircobj.Join(*ircchannel)
+
+    time.Sleep(3 * time.Second)
+
+    ircobj.SendRawf("NAMES %s", *ircchannel)
+
+    time.Sleep(3 * time.Second)
+
+
+	/*
     var talk *xmpp.Client
 	var err error
 	options := xmpp.Options{Host: *server,
@@ -132,6 +189,7 @@ func main() {
 	} else {
 		talk.JoinMUC(*ircmuc_jid, *nick, xmpp.CharHistory, 0, nil)
 	}
+	*/
     for {
 		runtime.Gosched()
 		time.Sleep(1 * time.Second)
