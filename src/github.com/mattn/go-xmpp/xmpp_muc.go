@@ -10,6 +10,7 @@ package xmpp
 import (
 	"fmt"
 	"time"
+	"errors"
 )
 
 const (
@@ -22,11 +23,17 @@ const (
 	SinceHistory = 4
 )
 
-func (c *Client) JoinMUCNoHistory(jid, nick string) {
+// Send sends room topic wrapped inside an XMPP message stanza body.
+func (c *Client) SendTopic(chat Chat) (n int, err error) {
+	return fmt.Fprintf(c.conn, "<message to='%s' type='%s' xml:lang='en'>"+"<subject>%s</subject></message>",
+		xmlEscape(chat.Remote), xmlEscape(chat.Type), xmlEscape(chat.Text))
+}
+
+func (c *Client) JoinMUCNoHistory(jid, nick string) (n int, err error) {
 	if nick == "" {
 		nick = c.jid
 	}
-	fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n"+
+	return fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n"+
 		"<x xmlns='%s'>"+
 		"<history maxchars='0'/></x>\n"+
 		"</presence>",
@@ -34,73 +41,74 @@ func (c *Client) JoinMUCNoHistory(jid, nick string) {
 }
 
 // xep-0045 7.2
-func (c *Client) JoinMUC(jid, nick string, history_type, history int, history_date *time.Time) {
+func (c *Client) JoinMUC(jid, nick string, history_type, history int, history_date *time.Time) (n int, err error) {
 	if nick == "" {
 		nick = c.jid
 	}
 	switch history_type {
 	case NoHistory:
-		fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
+		return fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
 			"<x xmlns='%s' />\n" +
 			"</presence>",
 				xmlEscape(jid), xmlEscape(nick), nsMUC)
 	case CharHistory:
-		fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
+		return fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
 			"<x xmlns='%s'>\n" +
 			"<history maxchars='%d'/></x>\n"+
 			"</presence>",
 				xmlEscape(jid), xmlEscape(nick), nsMUC, history)
 	case StanzaHistory:
-		fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
+		return fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
 			"<x xmlns='%s'>\n" +
 			"<history maxstanzas='%d'/></x>\n"+
 			"</presence>",
 				xmlEscape(jid), xmlEscape(nick), nsMUC, history)
 	case SecondsHistory:
-		fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
+		return fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
 			"<x xmlns='%s'>\n" +
 			"<history seconds='%d'/></x>\n"+
 			"</presence>",
 				xmlEscape(jid), xmlEscape(nick), nsMUC, history)
 	case SinceHistory:
 		if history_date != nil {
-			fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
+			return fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
 				"<x xmlns='%s'>\n" +
 				"<history since='%s'/></x>\n" +
 				"</presence>",
 					xmlEscape(jid), xmlEscape(nick), nsMUC, history_date.Format(time.RFC3339))
 		}
 	}
+	return 0, errors.New("Unknown history option")
 }
 
 // xep-0045 7.2.6
-func (c *Client) JoinProtectedMUC(jid, nick string, password string, history_type, history int, history_date *time.Time) {
+func (c *Client) JoinProtectedMUC(jid, nick string, password string, history_type, history int, history_date *time.Time) (n int, err error) {
 	if nick == "" {
 		nick = c.jid
 	}
 	switch history_type {
 	case NoHistory:
-		fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
+		return fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
 			"<x xmlns='%s'>\n" +
 			"<password>%s</password>\n"+
 			"</presence>",
 				xmlEscape(jid), xmlEscape(nick), nsMUC, xmlEscape(password))
 	case CharHistory:
-		fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
+		return fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
 			"<x xmlns='%s'>\n" +
 			"<password>%s</password>\n"+
 			"<history maxchars='%d'/></x>\n"+
 			"</presence>",
 				xmlEscape(jid), xmlEscape(nick), nsMUC, xmlEscape(password), history)
 	case StanzaHistory:
-		fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
+		return fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
 			"<x xmlns='%s'>\n" +
 			"<password>%s</password>\n"+
 			"<history maxstanzas='%d'/></x>\n"+
 			"</presence>",
 				xmlEscape(jid), xmlEscape(nick), nsMUC, xmlEscape(password), history)
 	case SecondsHistory:
-		fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
+		return fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
 			"<x xmlns='%s'>\n" +
 			"<password>%s</password>\n"+
 			"<history seconds='%d'/></x>\n"+
@@ -108,7 +116,7 @@ func (c *Client) JoinProtectedMUC(jid, nick string, password string, history_typ
 				xmlEscape(jid), xmlEscape(nick), nsMUC, xmlEscape(password), history)
 	case SinceHistory:
 		if history_date != nil {
-			fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
+			return fmt.Fprintf(c.conn, "<presence to='%s/%s'>\n" +
 				"<x xmlns='%s'>\n" +
 				"<password>%s</password>\n"+
 				"<history since='%s'/></x>\n" +
@@ -116,10 +124,11 @@ func (c *Client) JoinProtectedMUC(jid, nick string, password string, history_typ
 					xmlEscape(jid), xmlEscape(nick), nsMUC, xmlEscape(password), history_date.Format(time.RFC3339))
 		}
 	}
+	return 0, errors.New("Unknown history option")
 }
 
 // xep-0045 7.14
-func (c *Client) LeaveMUC(jid string) {
-	fmt.Fprintf(c.conn, "<presence from='%s' to='%s' type='unavailable' />",
+func (c *Client) LeaveMUC(jid string) (n int, err error) {
+	return fmt.Fprintf(c.conn, "<presence from='%s' to='%s' type='unavailable' />",
 		c.jid, xmlEscape(jid))
 }
