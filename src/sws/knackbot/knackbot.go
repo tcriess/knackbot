@@ -1,17 +1,16 @@
 package main
 
 import (
-    //"bufio"
     "strings"
     "flag"
     "fmt"
     "os"
     "log"
     "crypto/tls"
-	"github.com/mattn/go-xmpp"
 	"runtime"
 	"time"
 	"github.com/thoj/go-ircevent"
+    "github.com/tcriess/go-xmpp"
 )
 
 var server = flag.String("server", "", "server (<host> part of username)")
@@ -27,11 +26,8 @@ var resource = flag.String("resource", "knackbot", "resource")
 var muc_jid = flag.String("muc", "", "muc jid(s), comma-separated (required)")
 var muc_password = flag.String("mucpw", "", "muc password(s)")
 var nick = flag.String("nick", "", "nick to use in irc (messages from this nick in the muc are forwarded to irc), must be different from knackbot")
-//var ircmuc_jid = flag.String("ircmuc", "", "irc muc jid (required)")
-//var ircmuc_password = flag.String("ircmucpw", "", "irc muc password")
 var ircurl = flag.String("ircurl", "", "irc host url (<host>:<port>)")
 var ircchannel = flag.String("ircchannel", "", "irc channel(s) to join")
-//var ircnick = flag.String("ircnick", "", "irc nick")
 var ircserver = flag.String("ircserver", "", "irc server name (<host> part of ircurl)")
 
 func serverName(host string) string {
@@ -116,22 +112,7 @@ func main() {
             ServerName:         serverName(*ircserver),
 			InsecureSkipVerify: false,
 		}
-
     }
-    //Set options
-    //ircobj.UseTLS = true //default is false
-    //ircobj.TLSOptions //set ssl options
-    //ircobj.Password = "[server password]"
-    //Commands
-
-/*
-    ircobj.AddCallback("*", func(event *irc.Event) {
-        //event.Message() contains the message
-        //event.Nick Contains the sender
-        //event.Arguments[0] Contains the channel
-        fmt.Println("catchall: ", event.Code, ":", event.Source, ",", event.Nick, ",", event.Message())
-    });
-*/
 
     var talk *xmpp.Client
 	var err error
@@ -228,7 +209,6 @@ func main() {
         for _, channel := range ircchannels {
             ircobj.Join(channel)
         }
-        //ircobj.SendRawf("NAMES %s", *ircchannel)
     })
 
     ircobj.AddCallback("353", func(event *irc.Event) {
