@@ -7,9 +7,9 @@ import (
     "os"
     "log"
     "crypto/tls"
-	"runtime"
-	"time"
-	"github.com/thoj/go-ircevent"
+    "runtime"
+    "time"
+    "github.com/thoj/go-ircevent"
     "github.com/tcriess/go-xmpp"
 )
 
@@ -31,7 +31,7 @@ var ircchannel = flag.String("ircchannel", "", "irc channel(s) to join")
 var ircserver = flag.String("ircserver", "", "irc server name (<host> part of ircurl)")
 
 func serverName(host string) string {
-	return strings.Split(host, ":")[0]
+    return strings.Split(host, ":")[0]
 }
 
 func nickName(jid string) string {
@@ -55,28 +55,27 @@ func main() {
     }
     flag.Parse()
 
-	if *username == "" || *password == "" {
-		if *debug && *username == "" && *password == "" {
-			fmt.Fprintf(os.Stderr, "no username or password were given; attempting ANONYMOUS auth\n")
-		} else if *username != "" || *password != "" {
-			flag.Usage()
-		}
-	}
+    if *username == "" || *password == "" {
+        if *debug && *username == "" && *password == "" {
+            fmt.Fprintf(os.Stderr, "no username or password were given; attempting ANONYMOUS auth\n")
+        } else if *username != "" || *password != "" {
+            flag.Usage()
+        }
+    }
     if *muc_jid == "" || *nick == "" || *nick == "knackbot" {
         flag.Usage()
     }
 
-
     if !*notls {
-		xmpp.DefaultConfig = tls.Config{
-			ServerName:         serverName(*server),
-			InsecureSkipVerify: false,
-		}
-	}
+        xmpp.DefaultConfig = tls.Config{
+            ServerName:         serverName(*server),
+            InsecureSkipVerify: false,
+        }
+    }
 
-	if(*ircurl == "" || *ircchannel == "") {
-		flag.Usage()
-	}
+    if (*ircurl == "" || *ircchannel == "") {
+        flag.Usage()
+    }
 
     ircchannels := strings.Split(*ircchannel, ",")
     muc_jids := strings.Split(*muc_jid, ",")
@@ -87,7 +86,7 @@ func main() {
     }
 
     if len(muc_passwords) < len(muc_jids) {
-        for i:=len(muc_passwords); i<len(muc_jids); i++ {
+        for i := len(muc_passwords); i < len(muc_jids); i++ {
             muc_passwords = append(muc_passwords, "")
         }
     }
@@ -108,56 +107,56 @@ func main() {
             flag.Usage()
         }
         ircobj.UseTLS = true //default is false
-        ircobj.TLSConfig = &tls.Config{ //set ssl options
+        ircobj.TLSConfig = &tls.Config{//set ssl options
             ServerName:         serverName(*ircserver),
-			InsecureSkipVerify: false,
-		}
+            InsecureSkipVerify: false,
+        }
     }
 
     var talk *xmpp.Client
-	var err error
-	options := xmpp.Options{Host: *server,
-		User:           *username,
-		Password:       *password,
-		NoTLS:          *notls,
-		Debug:          *debug,
-		Session:        *session,
-		Status:         *status,
-		StatusMessage:  *statusMessage,
+    var err error
+    options := xmpp.Options{Host: *server,
+        User:           *username,
+        Password:       *password,
+        NoTLS:          *notls,
+        Debug:          *debug,
+        Session:        *session,
+        Status:         *status,
+        StatusMessage:  *statusMessage,
         Resource:       *resource,
-	}
+    }
 
-	talk, err = options.NewClient()
+    talk, err = options.NewClient()
     if err != nil {
-		log.Fatal(err)
-	}
+        log.Fatal(err)
+    }
 
     defer talk.Close()
 
     MUC2Channel := func(jid string) string {
-        if channel, ok := muc_jids_channels[jid] ; ok {
+        if channel, ok := muc_jids_channels[jid]; ok {
             return channel
         }
         return ""
     }
 
     Channel2MUC := func(channel string) string {
-        if muc_jid, ok := channels_muc_jids[channel] ; ok {
+        if muc_jid, ok := channels_muc_jids[channel]; ok {
             return muc_jid
         }
         return ""
     }
 
     go func() {
-		for {
-			chat, err := talk.Recv()
-			if err != nil {
-				log.Fatal(err)
-			}
-			switch v := chat.(type) {
-			case xmpp.Chat:
-				log.Println(v.Remote, v.Text)
-                log.Println("Bare jid: "+bareJid(v.Remote))
+        for {
+            chat, err := talk.Recv()
+            if err != nil {
+                log.Fatal(err)
+            }
+            switch v := chat.(type) {
+            case xmpp.Chat:
+                log.Println(v.Remote, v.Text)
+                log.Println("Bare jid: " + bareJid(v.Remote))
                 barejid := bareJid(v.Remote)
                 if channel := MUC2Channel(barejid); channel != "" {
                     log.Println("Was muc from nick: ", nickName(v.Remote))
@@ -198,11 +197,11 @@ func main() {
                         }
                     }
                 }
-			case xmpp.Presence:
-				log.Println("presence. from:", v.From, "show:", v.Show, "type:", v.Type, "status:", v.Status)
-			}
-		}
-	}()
+            case xmpp.Presence:
+                log.Println("presence. from:", v.From, "show:", v.Show, "type:", v.Type, "status:", v.Status)
+            }
+        }
+    }()
 
     ircobj.AddCallback("001", func(event *irc.Event) {
         // now we can join.
@@ -298,7 +297,7 @@ func main() {
     }()
 
     for {
-		runtime.Gosched()
-		time.Sleep(1 * time.Second)
-	}
+        runtime.Gosched()
+        time.Sleep(1 * time.Second)
+    }
 }
