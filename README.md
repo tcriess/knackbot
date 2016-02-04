@@ -8,10 +8,7 @@ Set your GOPATH environment variable to your favourite location. Then fetch the 
 
     go get github.com/tcriess/knackbot
     
-To install into $GOPATH/bin, do
-
-    cd $GOPATH/src/github.com/tcriess/knackbot
-    go install
+This should fetch all dependencies and build the executable in $GOPATH/bin.
   
 Usage
 -----
