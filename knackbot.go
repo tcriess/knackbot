@@ -13,6 +13,7 @@ import (
     "github.com/tcriess/go-xmpp"
 )
 
+var maxProcs = flag.Int("procs", 1, "set GOMAXPROCS")
 var server = flag.String("server", "", "server (<host> part of username)")
 var username = flag.String("username", "", "username (<name>@<host>)")
 var password = flag.String("password", "", "password")
@@ -54,6 +55,8 @@ func main() {
         os.Exit(2)
     }
     flag.Parse()
+
+    runtime.GOMAXPROCS(*maxProcs)
 
     if *username == "" || *password == "" {
         if *debug && *username == "" && *password == "" {
@@ -155,48 +158,50 @@ func main() {
             }
             switch v := chat.(type) {
             case xmpp.Chat:
-                log.Println(v.Remote, v.Text)
-                log.Println("Bare jid: " + bareJid(v.Remote))
-                barejid := bareJid(v.Remote)
-                if channel := MUC2Channel(barejid); channel != "" {
-                    log.Println("Was muc from nick: ", nickName(v.Remote))
-                    if nickName(v.Remote) == *nick {
-                        if strings.HasPrefix(strings.ToLower(v.Text), "kb ") {
-                            log.Println("Knackbot command:", v.Text)
-                            parts := strings.SplitN(strings.ToLower(v.Text), " ", 2)
-                            log.Println(parts)
-                            if len(parts) > 1 {
-                                switch parts[1] {
-                                case "names":
-                                    ircobj.SendRawf("NAMES %s", channel)
-                                case "topic":
-                                    ircobj.SendRawf("TOPIC %s", channel)
-                                case "status":
-                                    ircconnected := ircobj.Connected()
-                                    if ircconnected {
-                                        talk.Send(xmpp.Chat{Remote: barejid, Type: "groupchat", Text: "IRC connected"})
-                                    } else {
-                                        talk.Send(xmpp.Chat{Remote: barejid, Type: "groupchat", Text: "IRC not connected"})
+                go func(rem, text string) {
+                    log.Println(rem, text)
+                    log.Println("Bare jid: " + bareJid(rem))
+                    barejid := bareJid(rem)
+                    if channel := MUC2Channel(barejid); channel != "" {
+                        log.Println("Was muc from nick: ", nickName(rem))
+                        if nickName(rem) == *nick {
+                            if strings.HasPrefix(strings.ToLower(text), "kb ") {
+                                log.Println("Knackbot command:", text)
+                                parts := strings.SplitN(strings.ToLower(text), " ", 2)
+                                log.Println(parts)
+                                if len(parts) > 1 {
+                                    switch parts[1] {
+                                    case "names":
+                                        ircobj.SendRawf("NAMES %s", channel)
+                                    case "topic":
+                                        ircobj.SendRawf("TOPIC %s", channel)
+                                    case "status":
+                                        ircconnected := ircobj.Connected()
+                                        if ircconnected {
+                                            talk.Send(xmpp.Chat{Remote: barejid, Type: "groupchat", Text: "IRC connected"})
+                                        } else {
+                                            talk.Send(xmpp.Chat{Remote: barejid, Type: "groupchat", Text: "IRC not connected"})
+                                        }
+                                    default:
+                                        log.Println("Unknown command", parts[1])
                                     }
-                                default:
-                                    log.Println("Unknown command", parts[1])
                                 }
-                            }
-                        } else {
-                            log.Println("Forward message to irc...")
-                            if ircobj.Connected() {
-                                ircobj.Privmsg(channel, v.Text)
-                                log.Println(channel, v.Text)
                             } else {
-                                log.Println("Could not foward to channel", channel, "- not connected")
-                                _, err := talk.Send(xmpp.Chat{Remote: barejid, Type: "groupchat", Text: "Could not foward to channel" + channel + " - not connected"})
-                                if err != nil {
-                                    log.Fatal(err)
+                                log.Println("Forward message to irc...")
+                                if ircobj.Connected() {
+                                    ircobj.Privmsg(channel, text)
+                                    log.Println(channel, text)
+                                } else {
+                                    log.Println("Could not foward to channel", channel, "- not connected")
+                                    _, err := talk.Send(xmpp.Chat{Remote: barejid, Type: "groupchat", Text: "Could not foward to channel" + channel + " - not connected"})
+                                    if err != nil {
+                                        log.Fatal(err)
+                                    }
                                 }
                             }
                         }
                     }
-                }
+                }(v.Remote, v.Text)
             case xmpp.Presence:
                 log.Println("presence. from:", v.From, "show:", v.Show, "type:", v.Type, "status:", v.Status)
             }
@@ -204,64 +209,72 @@ func main() {
     }()
 
     ircobj.AddCallback("001", func(event *irc.Event) {
-        // now we can join.
-        for _, channel := range ircchannels {
-            ircobj.Join(channel)
-        }
+        go func() {
+            // now we can join.
+            for _, channel := range ircchannels {
+                ircobj.Join(channel)
+            }
+        }()
     })
 
     ircobj.AddCallback("353", func(event *irc.Event) {
         // RPL_NAMREPLY
         // NAMES response
-        log.Println("353", event.Arguments)
-        if len(event.Arguments) > 2 {
-            if jid := Channel2MUC(event.Arguments[2]); jid != "" {
-                log.Println("List of nicks in channel:", event.Arguments[2], event.Arguments[0], ", ", event.Code, ":", event.Source, ",", event.Nick, ",", event.Message())
-                nicks := strings.Split(event.Message(), " ")
-                log.Println(nicks)
-                _, err := talk.Send(xmpp.Chat{Remote: jid, Type: "groupchat", Text: "Nicks in IRC channel " + event.Arguments[2] + ": " + event.Message()})
-                if err != nil {
-                    log.Fatal(err)
+        go func(arguments []string, source, code, nick, message string) {
+            log.Println("353", arguments)
+            if len(arguments) > 2 {
+                if jid := Channel2MUC(arguments[2]); jid != "" {
+                    log.Println("List of nicks in channel:", arguments[2], arguments[0], ", ", code, ":", source, ",", nick, ",", message)
+                    nicks := strings.Split(message, " ")
+                    log.Println(nicks)
+                    _, err := talk.Send(xmpp.Chat{Remote: jid, Type: "groupchat", Text: "Nicks in IRC channel " + arguments[2] + ": " + message})
+                    if err != nil {
+                        log.Fatal(err)
+                    }
                 }
             }
-        }
+        }(event.Arguments, event.Source, event.Code, event.Nick, event.Message())
     });
 
     ircobj.AddCallback("332", func(event *irc.Event) {
         // RPL_TOPIC
-        log.Println("332", event.Arguments)
-        if len(event.Arguments) > 1 {
-            if jid := Channel2MUC(event.Arguments[1]); jid != "" {
-                log.Println("Channel subject:", event.Code, ":", event.Source, ",", event.Nick, ",", event.Message())
-                _, err := talk.SendTopic(xmpp.Chat{Remote: jid, Type: "groupchat", Text: event.Message()})
-                if err != nil {
-                    log.Fatal(err)
+        go func(arguments []string, source, code, nick, message string) {
+            log.Println("332", arguments)
+            if len(arguments) > 1 {
+                if jid := Channel2MUC(arguments[1]); jid != "" {
+                    log.Println("Channel subject:", code, ":", source, ",", nick, ",", message)
+                    _, err := talk.SendTopic(xmpp.Chat{Remote: jid, Type: "groupchat", Text: message})
+                    if err != nil {
+                        log.Fatal(err)
+                    }
                 }
             }
-        }
+        }(event.Arguments, event.Source, event.Code, event.Nick, event.Message())
     })
 
     ircobj.AddCallback("PRIVMSG", func(event *irc.Event) {
-        log.Println("Got privmsg event:", "nick:", event.Nick, "source:", event.Source)
-        if event.Nick != *nick && event.Nick != "" && len(event.Arguments) > 0 {
-            if jid := Channel2MUC(event.Arguments[0]); jid != "" {
-                log.Println("Forward message to MUC")
-                _, err := talk.SendPresence(xmpp.Presence{From: jid + "/knackbot", To: jid + "/" + event.Nick})
-                if err != nil {
-                    log.Fatal(err)
+        go func(arguments []string, source, code, enick, message string) {
+            log.Println("Got privmsg event:", "nick:", enick, "source:", source)
+            if enick != *nick && enick != "" && len(arguments) > 0 {
+                if jid := Channel2MUC(arguments[0]); jid != "" {
+                    log.Println("Forward message to MUC")
+                    _, err := talk.SendPresence(xmpp.Presence{From: jid + "/knackbot", To: jid + "/" + enick})
+                    if err != nil {
+                        log.Fatal(err)
+                    }
+                    _, err = talk.Send(xmpp.Chat{Remote: jid, Type: "groupchat", Text: message})
+                    if err != nil {
+                        log.Fatal(err)
+                    }
+                    _, err = talk.SendPresence(xmpp.Presence{To: jid + "/knackbot", From: jid + "/" + enick})
+                    if err != nil {
+                        log.Fatal(err)
+                    }
                 }
-                _, err = talk.Send(xmpp.Chat{Remote: jid, Type: "groupchat", Text: event.Message()})
-                if err != nil {
-                    log.Fatal(err)
-                }
-                _, err = talk.SendPresence(xmpp.Presence{To: jid + "/knackbot", From: jid + "/" + event.Nick})
-                if err != nil {
-                    log.Fatal(err)
-                }
+            } else {
+                log.Println("Was my nick - not forwarding")
             }
-        } else {
-            log.Println("Was my nick - not forwarding")
-        }
+        }(event.Arguments, event.Source, event.Code, event.Nick, event.Message())
     })
 
     ircobj.Connect(*ircurl) //Connect to server
